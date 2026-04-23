@@ -43,28 +43,31 @@ public:
         if (is_dead) return;
 
         rounds++;
-        instruction move_dir = current_direction;
+        // Check reverse direction AFTER updating move_dir from N if needed?
+        // Wait, current_direction is already updated in previous moves.
+        // If next_instr is NONE, move_dir = current_direction, no reverse check needed.
+        // If next_instr is not NONE, we check it against current_direction.
         if (next_instr != instruction::NONE) {
-            // Check for reverse direction
             if ((next_instr == instruction::UP && current_direction == instruction::DOWN) ||
                 (next_instr == instruction::DOWN && current_direction == instruction::UP) ||
                 (next_instr == instruction::LEFT && current_direction == instruction::RIGHT) ||
                 (next_instr == instruction::RIGHT && current_direction == instruction::LEFT)) {
                 is_dead = true;
+                // Move snake one last time? "直接判定为死亡"
+                // Usually this means it dies at the CURRENT round.
                 return;
             }
-            move_dir = next_instr;
+            current_direction = next_instr;
         }
 
-        current_direction = move_dir;
         std::pair<int, int> head = body.front();
         int nx = head.first;
         int ny = head.second;
 
-        if (move_dir == instruction::UP) nx--;
-        else if (move_dir == instruction::DOWN) nx++;
-        else if (move_dir == instruction::LEFT) ny--;
-        else if (move_dir == instruction::RIGHT) ny++;
+        if (current_direction == instruction::UP) nx--;
+        else if (current_direction == instruction::DOWN) nx++;
+        else if (current_direction == instruction::LEFT) ny--;
+        else if (current_direction == instruction::RIGHT) ny++;
 
         int height = get_height(map);
         int width = get_width(map);
@@ -93,7 +96,8 @@ public:
         bool eating = is_food(map, nx, ny);
 
         // Check body collision BEFORE moving (but considering if tail will move)
-        for (size_t i = 0; i < (eating ? body.size() : body.size() - 1); ++i) {
+        // If snake length is 1, body.size() - 1 is 0, so it won't hit itself.
+        for (int i = 0; i < (int)(eating ? body.size() : body.size() - 1); ++i) {
             if (body[i].first == nx && body[i].second == ny) {
                 is_dead = true;
                 return;
