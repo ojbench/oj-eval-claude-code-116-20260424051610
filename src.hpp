@@ -17,48 +17,49 @@ enum class instruction {
 
 struct Map;
 
+// These are implemented in main.cpp
 bool is_food(Map* map, int x, int y);
 bool is_wall(Map* map, int x, int y);
 void eat_food(Map* map, int x, int y);
 int get_height(Map* map);
 int get_width(Map* map);
 
+struct Map {
+    int height, width;
+    std::vector<std::string> grid;
+    bool is_food(int x, int y) { return grid[x][y] == '*'; }
+    bool is_wall(int x, int y) { return grid[x][y] == '#'; }
+    void eat_food(int x, int y) { grid[x][y] = '.'; }
+    int get_height() { return height; }
+    int get_width() { return width; }
+};
+
 class Snake {
 public:
     std::deque<std::pair<int, int>> body;
     instruction current_direction;
     bool is_dead;
-    int score;
-    int rounds;
 
-    Snake(int x, int y, instruction dir) {
+    Snake() : is_dead(false), current_direction(instruction::NONE) {}
+    Snake(int x, int y, instruction dir) : is_dead(false), current_direction(dir) {
         body.push_back({x, y});
-        current_direction = dir;
-        is_dead = false;
-        score = 0;
-        rounds = 0;
     }
 
     void move(instruction next_instr, Map* map) {
         if (is_dead) return;
 
-        rounds++;
-        // Check reverse direction AFTER updating move_dir from N if needed?
-        // Wait, current_direction is already updated in previous moves.
-        // If next_instr is NONE, move_dir = current_direction, no reverse check needed.
-        // If next_instr is not NONE, we check it against current_direction.
+        instruction next_dir = current_direction;
         if (next_instr != instruction::NONE) {
             if ((next_instr == instruction::UP && current_direction == instruction::DOWN) ||
                 (next_instr == instruction::DOWN && current_direction == instruction::UP) ||
                 (next_instr == instruction::LEFT && current_direction == instruction::RIGHT) ||
                 (next_instr == instruction::RIGHT && current_direction == instruction::LEFT)) {
                 is_dead = true;
-                // Move snake one last time? "直接判定为死亡"
-                // Usually this means it dies at the CURRENT round.
                 return;
             }
-            current_direction = next_instr;
+            next_dir = next_instr;
         }
+        current_direction = next_dir;
 
         std::pair<int, int> head = body.front();
         int nx = head.first;
@@ -69,34 +70,15 @@ public:
         else if (current_direction == instruction::LEFT) ny--;
         else if (current_direction == instruction::RIGHT) ny++;
 
-        int height = get_height(map);
-        int width = get_width(map);
+        int h = ::get_height(map);
+        int w = ::get_width(map);
 
-        // Check boundaries
-        if (nx < 0 || nx >= height || ny < 0 || ny >= width) {
+        if (nx < 0 || nx >= h || ny < 0 || ny >= w || ::is_wall(map, nx, ny)) {
             is_dead = true;
             return;
         }
 
-        // Check wall
-        if (is_wall(map, nx, ny)) {
-            is_dead = true;
-            return;
-        }
-
-        // Check if hitting its own body
-        // Note: if the tail moves out, it's fine, BUT if it eats food, the tail stays.
-        // Actually, if it hits the body, it's dead regardless of whether it's food or not,
-        // EXCEPT if it hits the tail and the tail is about to move.
-        // Wait, the rules say: "碰到墙壁、边界或者自己的身体，游戏结束".
-        // Usually, in snake, hitting the tail that is about to move is NOT death.
-        // But let's check the order: "每次移动一格，每次移动后，尾部减少一格".
-        // If it eats food, length increases by 1.
-
-        bool eating = is_food(map, nx, ny);
-
-        // Check body collision BEFORE moving (but considering if tail will move)
-        // If snake length is 1, body.size() - 1 is 0, so it won't hit itself.
+        bool eating = ::is_food(map, nx, ny);
         for (int i = 0; i < (int)(eating ? body.size() : body.size() - 1); ++i) {
             if (body[i].first == nx && body[i].second == ny) {
                 is_dead = true;
@@ -106,19 +88,90 @@ public:
 
         body.push_front({nx, ny});
         if (eating) {
-            eat_food(map, nx, ny);
+            ::eat_food(map, nx, ny);
         } else {
             body.pop_back();
         }
     }
 
     std::pair<int, std::pair<int, int> *> get_snake() {
-        int len = body.size();
+        int len = (int)body.size();
         std::pair<int, int>* arr = new std::pair<int, int>[len];
         for (int i = 0; i < len; ++i) {
             arr[i] = body[i];
         }
         return {len, arr};
+    }
+};
+
+class Game {
+public:
+    Map* map;
+    Snake snake;
+    int round;
+
+    Game() : map(nullptr), round(0) {}
+
+    void initialize() {
+        int h, w;
+        if (!(std::cin >> h >> w)) return;
+        map = new Map();
+        map->height = h;
+        map->width = w;
+        map->grid.resize(h);
+        int sx = -1, sy = -1;
+        for (int i = 0; i < h; ++i) {
+            std::cin >> map->grid[i];
+            for (int j = 0; j < w; ++j) {
+                if (map->grid[i][j] == '@') {
+                    sx = i; sy = j;
+                    map->grid[i][j] = '.';
+                }
+            }
+        }
+        char dir_char;
+        std::cin >> dir_char;
+        instruction start_dir;
+        if (dir_char == 'U') start_dir = instruction::UP;
+        else if (dir_char == 'D') start_dir = instruction::DOWN;
+        else if (dir_char == 'L') start_dir = instruction::LEFT;
+        else start_dir = instruction::RIGHT;
+        snake = Snake(sx, sy, start_dir);
+    }
+
+    void print_game() {
+        std::vector<std::string> display = map->grid;
+        for (size_t i = 1; i < snake.body.size(); ++i) {
+            display[snake.body[i].first][snake.body[i].second] = 'o';
+        }
+        display[snake.body[0].first][snake.body[0].second] = '@';
+        for (int i = 0; i < map->height; ++i) {
+            std::cout << display[i] << "\n";
+        }
+    }
+
+    void play() {
+        std::string instr_str;
+        while (std::cin >> instr_str) {
+            instruction instr;
+            if (instr_str == "U") instr = instruction::UP;
+            else if (instr_str == "D") instr = instruction::DOWN;
+            else if (instr_str == "L") instr = instruction::LEFT;
+            else if (instr_str == "R") instr = instruction::RIGHT;
+            else instr = instruction::NONE;
+
+            snake.move(instr, map);
+
+            if (snake.is_dead) {
+                std::cout << "Game Over\n";
+                std::cout << "Score: " << (int)snake.body.size() + round << "\n";
+                return;
+            }
+
+            round++;
+            std::cout << "Round: " << round << "\n";
+            print_game();
+        }
     }
 };
 
